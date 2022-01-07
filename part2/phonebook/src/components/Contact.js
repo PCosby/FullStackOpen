@@ -1,9 +1,53 @@
 import React from 'react'
+import ServerComm from './ServComm'
 
-const Contact = ({ contact }) => {
-  return (
-    <li>{contact.name}: {contact.number}</li>
-  )
+
+const removeContact = vars => {
+  const b = window.confirm(`Delete ${vars.contact.name}? This cannot be undone.`)
+  if (b) {
+    ServerComm.remove(vars.contact.id).then(()=>{
+      ServerComm.getAll().then(result => {vars.setContacts(result.data)})
+    })
+    .catch(()=>{
+      vars.setNotice({type: "error", text: `${vars.contact.name} has already been removed`})
+      ServerComm.getAll().then(result => {vars.setContacts(result.data)})
+      setTimeout(() => {vars.setNotice({type:null,text:null})}, 5000)
+    })
+  }
+}
+
+const updateContact = vars => {
+  const b = window.confirm(`${vars.contact.name} is already in the phonebook. Update this number?`)
+  if (b) {
+    const newNote = {...vars.contact, number: vars.newNumber}
+    ServerComm.update(vars.contact.id, newNote).then(()=>{
+      ServerComm.getAll().then(result => {vars.setContacts(result.data)})
+      vars.setNotice({type: "update", text: `Changed ${vars.contact.name}'s number`})
+      setTimeout(() => {vars.setNotice({type:null,text:null})}, 5000)
+    })
+    .catch(()=>{
+      vars.setNotice({type: "error", text: `${vars.contact.name} has already been removed`})
+      ServerComm.getAll().then(result => {vars.setContacts(result.data)})
+      setTimeout(() => {vars.setNotice({type:null,text:null})}, 5000)
+    })
+  }
+}
+
+const Notice = vars => {
+  if (vars.type == null) return null
+
+  return(
+  <div>
+    <div className = "notice"  style = {{color: vars.type == "error" ? "red" : "green"}}>
+      {vars.text}
+    </div>
+  </div>)
+}
+
+const Contact = (vars) => {
+  return (<div>
+    <li className = "contact">{vars.contact.name}: {vars.contact.number} <button onClick = {()=>removeContact(vars)}>Delete</button></li>
+  </div>)
 }
 
 const changeFunction = (event, fun) => {
@@ -26,23 +70,33 @@ const PersonForm = (vars) =>{
   const addPerson = (event) => {
       event.preventDefault()
 
-      var skip = false
+      var sameContact = null
 
       vars.contacts.forEach( c => {
-        if(!skip && c.name.toLowerCase() === vars.newName.toLowerCase()){
-          alert(`${vars.newName} is already in the phonebook`)
-          skip = true
+        if(sameContact == null && c.name.toLowerCase() === vars.newName.toLowerCase()){
+          sameContact = c
         }
       })
 
-      if(!skip){
-      vars.setContacts(vars.contacts.concat({
-        
-      id: vars.contacts.length + 1,
-      name: vars.newName,
-      number: vars.newNumber
-      
-      }))
+      if(sameContact != null){
+        updateContact({
+          contact: sameContact,
+          newNumber: vars.newNumber,
+          setContacts: vars.setContacts,
+          setNotice: vars.setNotice
+        })
+      }
+      else{
+        const newNote = {
+          name: vars.newName,
+          number: vars.newNumber
+        }
+
+      ServerComm.create(newNote).then(response=>{
+        vars.setContacts(vars.contacts.concat(response.data))
+        vars.setNotice({type: "add", text: `Added ${newNote.name}`})
+        setTimeout(() => {vars.setNotice({type:null,text:null})}, 5000)
+      })
 
       vars.setNewName('')
       vars.setNewNumber('')
@@ -91,7 +145,7 @@ const Persons = (vars) => {
 return(<ul>
       {whiteList.map(c => 
 
-          <Contact key={c.id} contact={c} />
+          <Contact key={c.id} contact={c} setContacts = {vars.setContacts} setNotice = {vars.setNotice}/>
         
       )}
     </ul>)
@@ -99,4 +153,4 @@ return(<ul>
 
 
 
-export {Filter,PersonForm,Persons}
+export {Filter,PersonForm,Persons, Notice}
